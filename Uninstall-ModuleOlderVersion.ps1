@@ -34,7 +34,8 @@ Function Uninstall-ModuleOlderVersion {
     KEYWORDS: PowerShell, PowerShell Gallery, 
    
     VERSIONS HISTORY
-    - 0.1.0 -  2016-02-18 - The first draft
+    - 0.1.0 - 2016-02-18 - The first draft
+    - 0.1.1 - 2016-02-19 - Modules filtering corrected
 
     TODO
 	- update help
@@ -76,6 +77,8 @@ Function Uninstall-ModuleOlderVersion {
     }
     catch {
         $script:MyDocumentsFolderPath = $null
+        
+        Write-Host "Error"
     }
     
     $script:ProgramFilesPSPath = Microsoft.PowerShell.Management\Join-Path -Path $env:ProgramFiles -ChildPath "WindowsPowerShell"
@@ -100,12 +103,12 @@ Function Uninstall-ModuleOlderVersion {
         
         If ($Scope -eq "AllUsers") {
             
-            $Path = $script:ProgramFilesModulesPath
+            $Path = "{0}*" -f $script:ProgramFilesModulesPath
             
         }
         Else {
             
-            $script:MyDocumentsModulesPath
+            $Path = "{0}*" -f $script:MyDocumentsModulesPath
             
         }
         
@@ -114,56 +117,64 @@ Function Uninstall-ModuleOlderVersion {
         Write-verbose -message $MessageText
         
     }
-}
-Else {
     
-    #Add validation of provided path here
-    
-}
-
-$MultiModules = (Get-Module -Name $Name -ListAvailable -verbose:$false | Where-Object -FilterScript { $_.path -like $Path } | Group-Object -Property Name | Where-Object -FilterScript { $_.count -gt 1 }).name
-
-If ($MultiModules) {
-    
-    [String]$MessageText = "Older versions for modules: {0} found" -f [string]::Join(",", $MultiModules)
-    
-    Write-Verbose -Message $MessageText
-    
-}
-Else {
-    
-    [String]$MessageText = "Any installed modules don't have older version installed."
-    
-    Write-Verbose -Message $MessageText
-    
-}
-
-ForEach ($Module in $MultiModules) {
-    
-    $CurrentMultiModule = Get-Module -ListAvailable -Name $Module -Verbose:$false | Sort-Object -Property Version
-    
-    $CurrentMultiModuleCount = ($CurrentMultiModule | Measure-Object).Count
-    
-    [String]$MessageText = "For the module {0} {1} versions found." -f $Module, $CurrentMultiModuleCount
-    
-    Write-Verbose -message $MessageText
-    
-    For ($i = 1; $i -lt $CurrentMultiModuleCount; $i++) {
+    Else {
         
-        $Older = $CurrentMultiModule[$i - 1]
-        
-        [String]$MessageText = "For the module {0} the version {1} will be uninstalled." -f $Module, $Older.Version
-        
-        Write-Verbose -Message $MessageText
-        
-        $FolderToRemove = ([system.io.fileinfo]$Older.Path).DirectoryName
-        
-        Remove-Item -Path $FolderToRemove -Force -Recurse -WhatIf
+        #Add validation of provided path here
         
     }
     
-}
-
+    If ($Path) {
+        
+        $MultiModules = (Get-Module -ListAvailable -verbose:$false | Where-Object -FilterScript { $_.path -like $Path -and $_.Name -like $Name } | Group-Object -Property Name | Where-Object -FilterScript { $_.count -gt 1 }).name
+        
+    }
+    Else {
+        $MultiModules = (Get-Module -ListAvailable -verbose:$false | Where-Object -FilterScript { $_.path -like $Path } | Group-Object -Property Name | Where-Object -FilterScript { $_.count -gt 1 }).name
+        
+    }
+    
+    If ($MultiModules) {
+        
+        [String]$MessageText = "Older versions for modules: {0} found" -f [string]::Join(",", $MultiModules)
+        
+        Write-Verbose -Message $MessageText
+        
+    }
+    Else {
+        
+        [String]$MessageText = "Any installed modules don't have older version installed."
+        
+        Write-Verbose -Message $MessageText
+        
+    }
+    
+    ForEach ($Module in $MultiModules) {
+        
+        $CurrentMultiModule = Get-Module -ListAvailable -Name $Module -Verbose:$false | Sort-Object -Property Version
+        
+        $CurrentMultiModuleCount = ($CurrentMultiModule | Measure-Object).Count
+        
+        [String]$MessageText = "For the module {0} {1} versions found." -f $Module, $CurrentMultiModuleCount
+        
+        Write-Verbose -message $MessageText
+        
+        For ($i = 1; $i -lt $CurrentMultiModuleCount; $i++) {
+            
+            $Older = $CurrentMultiModule[$i - 1]
+            
+            [String]$MessageText = "For the module {0} the version {1} will be uninstalled." -f $Module, $Older.Version
+            
+            Write-Verbose -Message $MessageText
+            
+            $FolderToRemove = ([system.io.fileinfo]$Older.Path).DirectoryName
+            
+            Remove-Item -Path $FolderToRemove -Force -Recurse -WhatIf
+            
+        }
+        
+    }
+    
 }
 
 # Function coppied from PowerShellGet module, author: Microsoft
