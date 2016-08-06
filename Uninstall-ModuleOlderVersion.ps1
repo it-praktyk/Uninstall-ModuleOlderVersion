@@ -80,7 +80,7 @@ Function Uninstall-ModuleOlderVersion {
     - 0.1.1 - 2016-02-19 - Modules filtering corrected
 	- 0.2.0 - 2016-02-23 - Uninstall-Module used except Remove-Item on a folder, PassThru implemented,
 						   parameter sets implemented, exit codes implemented, help updated
-
+	- 0.3.0 - 2016-08-07 - Corrected behavior for WhatIf
 
     TODO
 	- update help
@@ -114,11 +114,23 @@ Function Uninstall-ModuleOlderVersion {
 	)
 
 	begin {
+        
+        [Bool]$UninstallOne = $false
+        
+        [bool]$SkipAll = $false
 
-		[Bool]$UninstallOne = $false
-
-		[Bool]$UninstallForAll = $false
-
+		If ( $PSBoundParameters.Get_Item("WhatIf").IsPresent ) {
+		
+			$UninstallForAll = $true
+		
+		}
+		Else {
+		
+			[Bool]$UninstallForAll = $false
+		
+		}
+		
+		
 		$Results =@()
 
 		If ($Path) {
@@ -200,10 +212,10 @@ Function Uninstall-ModuleOlderVersion {
 			[String]$MessageText = "Older versions for modules: {0} found" -f [string]::Join(",", $MultiModules)
 
 			Write-Verbose -Message $MessageText
-
-			:MainLoop ForEach ($Module in $MultiModules) {
-
-				$CurrentMultiModule = Get-Module -ListAvailable -Name $Module -Verbose:$false | Sort-Object -Property Version
+            
+            :MainLoop ForEach ($Module in $MultiModules) {
+                
+                $CurrentMultiModule = Get-Module -ListAvailable -Name $Module -Verbose:$false | Sort-Object -Property Version
 
 				$CurrentMultiModuleCount = ($CurrentMultiModule | Measure-Object).Count
 
@@ -217,7 +229,7 @@ Function Uninstall-ModuleOlderVersion {
 
 					$Older = $CurrentMultiModule[$i - 1]
 
-					If (! $UninstallForAll) {
+					If (-not $UninstallForAll -and -not $SkipAll) {
 
 						[String]$title = "Uninstall module"
 
@@ -252,6 +264,8 @@ Function Uninstall-ModuleOlderVersion {
 							}
 
 							3 {
+							
+								$SkipAll = $true
 
 								$ExitCode = 3
 
