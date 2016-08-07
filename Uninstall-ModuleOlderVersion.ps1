@@ -78,13 +78,11 @@ Function Uninstall-ModuleOlderVersion {
     VERSIONS HISTORY
     - 0.1.0 - 2016-02-18 - The first draft
     - 0.1.1 - 2016-02-19 - Modules filtering corrected
-	- 0.2.0 - 2016-02-23 - Uninstall-Module used except Remove-Item on a folder, PassThru implemented,
-						   parameter sets implemented, exit codes implemented, help updated
+	- 0.2.0 - 2016-02-23 - Uninstall-Module used except Remove-Item on a folder, PassThru implemented, parameter sets implemented, exit codes implemented, help updated
 	- 0.3.0 - 2016-08-07 - Corrected behavior for WhatIf
+	- 0.4.0 - 2016-08-07 - Implemented checking administrative rights
 
     TODO
-	- update help
-	- check if function is used in elevated PowerShell
 	- implement pipeline for the module name
 	- implement support for uninstalling scripts also
 
@@ -112,19 +110,27 @@ Function Uninstall-ModuleOlderVersion {
 		[Switch]$ReturnExitCode
 
 	)
-
-	begin {
-        
+    
+    begin {
+                
         [Bool]$UninstallOne = $false
         
         [bool]$SkipAll = $false
-
-		If ( $PSBoundParameters.Get_Item("WhatIf").IsPresent ) {
 		
-			$UninstallForAll = $true
+		Try {
 		
+			If ( $PSBoundParameters.Get_Item("WhatIf").IsPresent ) {
+			
+				$UninstallForAll = $true
+			
+			}
+			Else {
+			
+				[Bool]$UninstallForAll = $false
+			
+			}
 		}
-		Else {
+		Catch {
 		
 			[Bool]$UninstallForAll = $false
 		
@@ -151,8 +157,6 @@ Function Uninstall-ModuleOlderVersion {
 				Write-Host "Error"
 			}
 
-
-
 			$script:ProgramFilesPSPath = Microsoft.PowerShell.Management\Join-Path -Path $env:ProgramFiles -ChildPath "WindowsPowerShell"
 
 			$script:MyDocumentsPSPath = if ($script:MyDocumentsFolderPath) {
@@ -174,18 +178,26 @@ Function Uninstall-ModuleOlderVersion {
 			If ([String]::IsNullOrEmpty($Path)) {
 
 				If ($Scope -eq "AllUsers") {
-
-					$Path = "{0}*" -f $script:ProgramFilesModulesPath
-
-				}
-				Else {
-
-					$Path = "{0}*" -f $script:MyDocumentsModulesPath
-
-				}
-
-			}
-
+                    
+                    $Path = "{0}*" -f $script:ProgramFilesModulesPath
+                    
+                    If (-not $(Test-RunningAsElevated)) {
+                        
+                        [String]$MessageText = "Administrator rights are required to install modules in {0}. Log on to the computer with an account that has Administrator rights, and then try again.`You can also try running the Windows PowerShell session with elevated rights (Run as Administrator)." -f $Path
+                        
+                        Throw $MessageText
+                        
+                    }
+                    
+                }
+                Else {
+                    
+                    $Path = "{0}*" -f $script:MyDocumentsModulesPath
+                    
+                }
+                
+            }
+            
 			[String]$MessageText = "Uninstalling older version of module(s) from the path: {0}" -f $Path
 
 			Write-verbose -message $MessageText
