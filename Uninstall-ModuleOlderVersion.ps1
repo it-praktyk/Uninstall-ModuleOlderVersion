@@ -24,6 +24,9 @@ Function Uninstall-ModuleOlderVersion {
 	.PARAMETER ReturnExitCode
 	If the parameter is set to true than the function will return exit code number
 
+	.PARAMETER Force
+	Forces uninstallation even if dependencies for other modules can be broken.
+
 	Exit codes
 	-1 - Any module don't have older version installed
 	 0 - The older module version installed successfully
@@ -81,65 +84,107 @@ Function Uninstall-ModuleOlderVersion {
 	- 0.2.0 - 2016-02-23 - Uninstall-Module used except Remove-Item on a folder, PassThru implemented, parameter sets implemented, exit codes implemented, help updated
 	- 0.3.0 - 2016-08-07 - Corrected behavior for WhatIf
 	- 0.4.0 - 2016-08-07 - Implemented checking administrative rights
+	- 0.5.0 - 2017-07-09
+		- Hard coded 'WhatIf removed' - fix #1
+		- Windows 10 built-in modules will not be uninstalled to avoid display errors -#2
+		- development mode implemented
+		- the parameter Force added
+		- parameterSets extended
 
     TODO
+	- implement uninstalling modules from provided path
 	- implement pipeline for the module name
 	- implement support for uninstalling scripts also
 
+	DEVELOPMENT MODE
+	You can use this function in development mode. For that you need to set the variable DevelopmentMode to $true. After that '-WhatIf' will be used for the command 'Uninstall-Module'.
+
 
     LICENSE
-	Copyright (c) 2016 Wojciech Sciesinski
-    This function is licensed under The MIT License (MIT)
+	Copyright (c) 2016-2017 Wojciech Sciesinski  
+    This function is licensed under The MIT License (MIT)  
     Full license text: https://opensource.org/licenses/MIT
 
 #>
 
 	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium', DefaultParameterSetName = 'byScope')]
+	[OutputType('System.Object[]', ParameterSetName = 'PassThruSetName')]
+	[OutputType('System.Object[]', ParameterSetName = 'ReturnExitCodeSetName')]
 	Param (
 
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, Position = 0 )]
 		[String]$Name,
 		[Parameter(Mandatory = $false, ParameterSetName = 'byScope')]
+		[Parameter(Mandatory = $false, ParameterSetName = 'PassThrueSetName')]
+		[Parameter(Mandatory = $false, ParameterSetName = 'ReturnExitCodeSetName')]
 		[ValidateSet("CurrentUser", "AllUsers")]
 		[string]$Scope = "AllUsers",
 		[Parameter(Mandatory = $false, ParameterSetName = 'byPath')]
+		[Parameter(Mandatory = $false, ParameterSetName = 'PassThrueSetName')]
+		[Parameter(Mandatory = $false, ParameterSetName = 'ReturnExitCodeSetName')]
 		[String]$Path,
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, ParameterSetName = 'PassThrueSetName')]
 		[Switch]$PassThru,
-		[Parameter(Mandatory = $false)]
-		[Switch]$ReturnExitCode
-
+		[Parameter(Mandatory = $false, ParameterSetName = 'ReturnExitCodeSetName')]
+		[Switch]$ReturnExitCode,
+		[Switch]$Force
 	)
-    
+
     begin {
-                
+
+		#$DevelopmentMode = $true
+
+		# If ( $PSBoundParameters.ContainsKey('Force') ) {
+
+		# 	[String]$MessageText = 'Using of the parameter Force can cause that other modules will stop work due to broken dependencies.'
+
+		# 	Write-Warning $MessageText
+
+		# }
+
+		If ( $DevelopmentMode ) {
+
+			[String]$MessageText = "The function Uninstall-ModuleOlderVersion is run in the development mode. The parameter 'WhatIf' was automaticaly added."
+
+			Write-Warning $MessageText
+
+		}
+
+		$BuiltinModules = @{PackageManagement = '1.0.0.1';
+							PowerShellGet = '1.0.0.1';
+							Pester ='3.4.0'}
+
         [Bool]$UninstallOne = $false
-        
+
         [bool]$SkipAll = $false
-		
+
 		Try {
-		
+
 			If ( $PSBoundParameters.Get_Item("WhatIf").IsPresent ) {
-			
+
 				$UninstallForAll = $true
-			
+
 			}
 			Else {
-			
+
 				[Bool]$UninstallForAll = $false
-			
+
 			}
 		}
 		Catch {
-		
+
 			[Bool]$UninstallForAll = $false
-		
+
 		}
-		
-		
+
+
 		$Results =@()
 
 		If ($Path) {
+
+			[String]$MessageText = "Sorry uninstalling by Path is not fully tested/implemented yet"
+
+			Write-Warning $MessageText
 
 			#Add validation of provided path here
 
@@ -154,7 +199,6 @@ Function Uninstall-ModuleOlderVersion {
 			catch {
 				$script:MyDocumentsFolderPath = $null
 
-				Write-Host "Error"
 			}
 
 			$script:ProgramFilesPSPath = Microsoft.PowerShell.Management\Join-Path -Path $env:ProgramFiles -ChildPath "WindowsPowerShell"
@@ -178,26 +222,26 @@ Function Uninstall-ModuleOlderVersion {
 			If ([String]::IsNullOrEmpty($Path)) {
 
 				If ($Scope -eq "AllUsers") {
-                    
+
                     $Path = "{0}*" -f $script:ProgramFilesModulesPath
-                    
+
                     If (-not $(Test-RunningAsElevated)) {
-                        
-                        [String]$MessageText = "Administrator rights are required to install modules in {0}. Log on to the computer with an account that has Administrator rights, and then try again.`You can also try running the Windows PowerShell session with elevated rights (Run as Administrator)." -f $Path
-                        
+
+                        [String]$MessageText = "Administrator rights are required to install modules in {0}. Log on to the computer with an account that has Administrator rights, and then try again. `You can also try running the Windows PowerShell session with elevated rights (Run as Administrator)." -f $Path
+
                         Throw $MessageText
-                        
+
                     }
-                    
+
                 }
                 Else {
-                    
+
                     $Path = "{0}*" -f $script:MyDocumentsModulesPath
-                    
+
                 }
-                
+
             }
-            
+
 			[String]$MessageText = "Uninstalling older version of module(s) from the path: {0}" -f $Path
 
 			Write-verbose -message $MessageText
@@ -224,9 +268,9 @@ Function Uninstall-ModuleOlderVersion {
 			[String]$MessageText = "Older versions for modules: {0} found" -f [string]::Join(",", $MultiModules)
 
 			Write-Verbose -Message $MessageText
-            
+
             :MainLoop ForEach ($Module in $MultiModules) {
-                
+
                 $CurrentMultiModule = Get-Module -ListAvailable -Name $Module -Verbose:$false | Sort-Object -Property Version
 
 				$CurrentMultiModuleCount = ($CurrentMultiModule | Measure-Object).Count
@@ -276,7 +320,7 @@ Function Uninstall-ModuleOlderVersion {
 							}
 
 							3 {
-							
+
 								$SkipAll = $true
 
 								$ExitCode = 3
@@ -291,15 +335,47 @@ Function Uninstall-ModuleOlderVersion {
 
 					if ($UninstallForAll -or $UninstallOne) {
 
-						[String]$MessageText = "Uninstalling the {0} of the module {1}." -f $Older.Version, $Module
+						[String]$MessageText = "Uninstalling the version {0} of the module {1}." -f $Older.Version, $Module
 
 						Write-Verbose -Message $MessageText
 
 						Try {
+							If ( $DevelopmentMode ) {
 
-							Uninstall-Module -Name $Module -MaximumVersion $Older.Version -whatif
+								If ( $BuiltinModules[$Module] -eq $Older.Version ) {
 
-							$Results += $Older
+									[String]$MessageText = "The module {0} version {1} can't be uninstalled due this is built-in module" -f $Module, $Older.Version
+
+									Write-Warning $MessageText
+
+								}
+								Else {
+
+									Uninstall-Module -Name $Module -MaximumVersion $Older.Version -WhatIf
+
+								}
+
+							}
+							ElseIf ( $BuiltinModules[$Module] -ne $Older.Version ) {
+
+								[String]$WhatIfMessageText = "Version '{0}' of module '{1}'" -f $Older.Version, $Module
+
+								 if ($pscmdlet.ShouldProcess($WhatIfMessageText, "Uninstall-Module")){
+
+									Uninstall-Module -Name $Module -MaximumVersion $Older.Version -Force:$force
+
+									$Results += $Older
+
+								 }
+
+							}
+							ElseIf ( $BuiltinModules[$Module] -eq $Older.Version ) {
+
+								[String]$MessageText = "The module {0} version {1} can't be uninstalled due this is built-in module" -f $Module, $Older.Version
+
+								Write-Warning $MessageText
+
+							}
 
 						}
 						Catch {
